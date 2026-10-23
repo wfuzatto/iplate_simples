@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private const val DEFAULT_BACKEND = ""
+private const val DEFAULT_BACKEND = "https://vale.expresso.app/iplate_simples/backend"
 private const val SETTINGS = "iplate_simples_settings"
 private const val MAX_DETAILS_PER_UPLOAD = 24
 
@@ -170,7 +170,7 @@ private fun InspectionApp() {
             Spacer(Modifier.width(10.dp))
             Text("iPlate Simples", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f))
-            IconButton(onClick = { newServer = server; settingsOpen = true }) {
+            IconButton(onClick = { newServer = server; serverStatus = ""; settingsOpen = true }) {
                 Icon(Icons.Default.Settings, contentDescription = "Configurações")
             }
         }
@@ -427,17 +427,33 @@ private fun InspectionApp() {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(newServer, { newServer = it; serverStatus = "" }, modifier = Modifier.fillMaxWidth(),
                         label = { Text("URL do backend HTTPS") }, singleLine = true)
-                    Text("Use a pasta do NOVO backend iPlate Simples, não o antigo endpoint de cadastro. Ex.: https://servidor/iplate_simples/backend",
+                    Text("Endereço sugerido do iPlate Simples (publicação ainda não confirmada). Não use o endpoint antigo de veículos.",
                         style = MaterialTheme.typography.bodySmall)
+                    TextButton(
+                        onClick = {
+                            newServer = DEFAULT_BACKEND
+                            serverStatus = "Endereço sugerido restaurado. Teste a API antes de utilizar."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Restaurar endereço padrão") }
                     OutlinedButton(onClick = {
-                        runAction {
-                            Backend.verifyServer(newServer)
-                            serverStatus = "API iPlate Simples identificada corretamente."
+                        if (!busy) scope.launch {
+                            busy = true
+                            serverStatus = "Testando a conexão..."
+                            try {
+                                Backend.verifyServer(newServer)
+                                serverStatus = "API iPlate Simples identificada corretamente."
+                            } catch (ex: Exception) {
+                                serverStatus = ex.message ?: "Falha ao validar o endereço."
+                            } finally {
+                                busy = false
+                            }
                         }
                     }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text("Testar endereço da API")
                     }
-                    if (serverStatus.isNotBlank()) Text(serverStatus, color = MaterialTheme.colorScheme.primary)
+                    if (serverStatus.isNotBlank())
+                        Text(serverStatus, color = MaterialTheme.colorScheme.primary)
                     Text("Credenciais da API Expresso devem ficar apenas no servidor.",
                         style = MaterialTheme.typography.bodySmall)
                 }
