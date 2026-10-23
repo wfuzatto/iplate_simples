@@ -60,7 +60,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private const val DEFAULT_BACKEND = "https://vale.expresso.app/iplate_simples/backend"
+// Host das vistorias e fotografias. O caminho é a implantação prevista,
+// validada por /api/health.php antes de autenticar; não pressupõe publicação.
+private const val DEFAULT_BACKEND = "https://prodatastelecom.com.br/iplate_simples/backend"
+private const val PREVIOUS_DEFAULT_BACKEND = "https://vale.expresso.app/iplate_simples/backend"
 private const val SETTINGS = "iplate_simples_settings"
 private const val MAX_DETAILS_PER_UPLOAD = 24
 
@@ -94,7 +97,16 @@ class MainActivity : ComponentActivity() {
 private fun InspectionApp() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE) }
-    var server by remember { mutableStateOf(prefs.getString("server", DEFAULT_BACKEND) ?: DEFAULT_BACKEND) }
+    // Corrige instalações anteriores que herdaram o endereço padrão errado;
+    // mantém intacta qualquer URL personalizada configurada pelo operador.
+    val initialBackend = remember {
+        val configured = prefs.getString("server", DEFAULT_BACKEND).orEmpty()
+        if (configured.isBlank() || configured.trimEnd('/') == PREVIOUS_DEFAULT_BACKEND) {
+            prefs.edit().putString("server", DEFAULT_BACKEND).apply()
+            DEFAULT_BACKEND
+        } else configured
+    }
+    var server by remember { mutableStateOf(initialBackend) }
     var newServer by remember { mutableStateOf(server) }
     var settingsOpen by remember { mutableStateOf(false) }
     var username by remember { mutableStateOf(prefs.getString("username", "") ?: "") }
@@ -426,8 +438,9 @@ private fun InspectionApp() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(newServer, { newServer = it; serverStatus = "" }, modifier = Modifier.fillMaxWidth(),
-                        label = { Text("URL do backend HTTPS") }, singleLine = true)
-                    Text("Endereço sugerido do iPlate Simples (publicação ainda não confirmada). Não use o endpoint antigo de veículos.",
+                        label = { Text("Servidor Prodatas (vistorias e fotos)") }, singleLine = true)
+                    Text("Servidor de armazenamento: Prodatas Telecom. O caminho /iplate_simples/backend é previsto, " +
+                        "mas depende de publicação no servidor. Confirme em Testar endereço da API.",
                         style = MaterialTheme.typography.bodySmall)
                     TextButton(
                         onClick = {
@@ -454,7 +467,8 @@ private fun InspectionApp() {
                     }
                     if (serverStatus.isNotBlank())
                         Text(serverStatus, color = MaterialTheme.colorScheme.primary)
-                    Text("Credenciais da API Expresso devem ficar apenas no servidor.",
+                    Text("Consulta de reservas: Vale Expresso (CPF/senha somente no backend da Prodatas). " +
+                        "Fotografias: armazenamento privado na Prodatas. Nenhuma foto é enviada ao Vale Expresso.",
                         style = MaterialTheme.typography.bodySmall)
                 }
             }, confirmButton = {
