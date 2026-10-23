@@ -7,7 +7,8 @@ App Android para vistoria fotográfica de veículos vinculados a hóspedes, dese
 - Busca por número completo de reserva na API Expresso atualizada, **através do backend** (credenciais Expresso jamais ficam no APK).
 - Busca por nome: requer habilitar o banco de hotelaria configurado no backend; o contrato público documentado da API Expresso **não** possui endpoint de busca por nome.
 - Placa digitada ou reconhecida via OCR local ML Kit a partir da fotografia, editável pelo operador.
-- Seis fotografias: placa, frente, lateral direita, lateral esquerda, traseira e teto.
+- Seis fotografias obrigatórias: placa, frente, lateral direita, lateral esquerda, traseira e teto.
+- **+ Foto de detalhe**: fotos adicionais com descrição opcional (amassados, vidros trincados etc.), zoom, remoção antes do envio e anexação adicional após salvar o veículo; vínculo SQL pelo ID da vistoria.
 - Arquivos originais JPEG da câmera preservados, upload multipart **sem redimensionamento/recompressão**, e visualização ampliável com pinça; prévia no Android usa amostragem para evitar estouro de memória.
 - Sem QR Code, marca/modelo, FIPE ou consulta externa de veículos.
 
@@ -23,7 +24,7 @@ Configure por variáveis de ambiente ou em `backend/config.local.php` (modelo em
 - `HOTELARIA_DB_HOST`, `HOTELARIA_DB_NAME`, `HOTELARIA_DB_USER`, `HOTELARIA_DB_PASSWORD` (opcional para nome)
 - `IPLATE_SIM_NAME_SEARCH=1` habilita busca por nome no banco complementar com o esquema `reservas`, `reserva_hospedes`, `hospedes`.
 
-Endpoints: `api/login.php` (POST form: username/password), `api/reservation-search.php` (POST JSON: api_token, term, mode=code|name), `api/entry-create.php` (POST multipart: api_token, plate, reservation, as seis fotos).
+Endpoints: `api/login.php` (POST form: username/password), `api/reservation-search.php` (POST JSON: api_token, term, mode=code|name), `api/entry-create.php` (POST multipart: api_token, plate, reservation, seis fotos e detalhes opcionais) e `api/detail-photos-append.php` (POST multipart para acrescentar detalhes a uma vistoria do operador já salva). **Instalações anteriores devem aplicar `backend/migrations/2026-10-detail-photos.sql` antes de enviar novas fotos.**
 
 **Importante:** A pesquisa por nome exige base de hotelaria local e correspondência real entre o código dessa base e os códigos do Expresso. Resultados encontrados por nome são revalidados via Expresso por código antes de vincular a vistoria. Se não existir essa fonte, o app mostra a indisponibilidade em vez de fingir que o Expresso pesquisa nomes.
 
