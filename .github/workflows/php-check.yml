@@ -20,6 +20,8 @@ jobs:
         run: php backend/tests/expresso-reservation-test.php
       - name: Test detail photo upload contract
         run: php backend/tests/detail-photos-test.php
+      - name: Test detail linkage and append with SQL fixture
+        run: php backend/tests/detail-storage-test.php
       - name: Package backend for FTP or cPanel installation
         run: |
           cd backend
