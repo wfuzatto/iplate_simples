@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private const val DEFAULT_BACKEND = "https://vale.expresso.app/iplate_simples/backend"
+private const val DEFAULT_BACKEND = ""
 private const val SETTINGS = "iplate_simples_settings"
 
 private enum class PhotoType(val key: String, val caption: String) {
