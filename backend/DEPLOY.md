@@ -97,3 +97,56 @@ proxy e servidor web. Não habilite listagem pública desse diretório.
 
 **Observação:** a busca por nome não faz parte do contrato público da
 API Expresso. Use a base complementar de hotelaria, se disponível.
+
+## 5. Fotos adicionais de detalhes de danos (v1.2)
+
+O formulário Android mostra **+ Foto de detalhe** depois das seis fotos principais.
+Cada foto extra pode receber uma legenda, por exemplo "amassado porta direita"
+ou "para-brisa trincado", e pode ser ampliada antes do envio.
+
+- Antes do primeiro envio, as fotos extras são gravadas junto da vistoria;
+  depois do primeiro envio, o operador pode registrar novos detalhes na
+  **mesma vistoria** usando **Enviar mais detalhes para o veículo #ID**.
+- Não existe limite fixo de fotos **por veículo**; os uploads são divididos
+  em lotes de até 24 imagens de detalhe, mais as seis fotos principais no
+  primeiro registro. Todos os arquivos ficam no diretório privado sem
+  redimensionamento/recompressão.
+- As seis fotos principais ficam em `iplate_simples_entries`. As extras ficam
+  em `iplate_simples_detail_photos`, ligadas pela coluna
+  `entry_id` à vistoria correspondente, ordenadas por `sequence_no` e
+  com `description` opcional. O backend grava imagens e banco em uma
+  transação, limpando arquivos novos se a inserção falhar.
+- Para continuar anexando depois da primeira gravação, é preciso manter a
+  vistoria aberta no aplicativo. Não há tela de histórico/reabertura ainda.
+- O endpoint `api/detail-photos-append.php` exige o token de operador
+  e permite acréscimos apenas à vistoria criada pelo próprio operador.
+
+### Atualização de banco existente
+
+Execute **uma vez** a migração:
+
+```sql
+SOURCE /caminho/backend/migrations/2026-10-detail-photos.sql;
+```
+
+Alternativamente, copie o conteúdo SQL para o phpMyAdmin (se `SOURCE`
+não for permitido). Isso cria somente a tabela nova e não altera as
+vistorias anteriores.
+
+### Ajustes de tamanho no PHP e no proxy
+
+A partir desta versão, o servidor precisa aceitar até 30 arquivos no
+primeiro envio (6 principais + 24 extras), por exemplo:
+
+```ini
+upload_max_filesize=25M
+max_file_uploads=35
+post_max_size=800M
+max_input_time=600
+```
+
+**Valores máximos, não recomendação universal:** a memória, espaço, tempo e
+limites do provedor devem ser dimensionados antes de adotar upload de
+centenas de MB, incluindo `client_max_body_size` do proxy, caso exista.
+Recomenda-se enviar em lotes pequenos quando houver rede móvel instável.
+O usuário poderá continuar anexando em lotes após salvar.
