@@ -434,16 +434,20 @@ private fun decodePreview(file: File, maxDimension: Int): Bitmap? {
 }
 
 private suspend fun recognizePlate(context: Context, file: File): String? {
+    // Somente a imagem de trabalho do OCR é amostrada. O JPEG original da
+    // vistoria nunca é redimensionado, regravado ou recomprimido.
+    val preview = withContext(Dispatchers.IO) { decodePreview(file, 2400) }
+        ?: throw IllegalStateException("Não foi possível ler a foto da placa.")
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     return try {
-        val image = InputImage.fromFilePath(context, Uri.fromFile(file))
+        val image = InputImage.fromBitmap(preview, 0)
         val output = suspendCancellableCoroutine<String> { continuation ->
             recognizer.process(image).addOnSuccessListener { continuation.resume(it.text) }
                 .addOnFailureListener { continuation.resumeWithException(it) }
         }
         val normalized = output.uppercase().replace(Regex("[^A-Z0-9]"), "")
         Regex("[A-Z]{3}[0-9][A-Z0-9][0-9]{2}").find(normalized)?.value
-    } finally { recognizer.close() }
+    } finally { recognizer.close(); preview.recycle() }
 }
 
 private object Backend {
