@@ -1,0 +1,20 @@
+name: Backend PHP validation
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/php-check.yml']
+  workflow_dispatch:
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: none
+          coverage: none
+      - name: Check syntax of backend PHP
+        run: find backend -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Test Expresso contract without network or credentials
+        run: php backend/tests/expresso-reservation-test.php
