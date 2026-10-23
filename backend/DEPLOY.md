@@ -1,4 +1,14 @@
-# Instalação do iPlate Simples no servidor (sem alterar o iPlate original)
+# Instalação do iPlate Simples na Prodatas Telecom (sem alterar o iPlate original)
+
+**Separação dos sistemas:** o domínio Prodatas Telecom recebe login do operador,
+cadastros, fotos de veículos e todos os anexos de danos. O serviço Vale Expresso
+é consultado **somente pelo backend PHP da Prodatas** para validar reservas
+via CPF/senha, sem receber fotos nem documentos de veículos.
+
+O aplicativo sugere `https://prodatastelecom.com.br/iplate_simples/backend`
+como URL de implantação futura, **ainda não confirmada em produção**.
+Se o diretório real da hospedagem for diferente (por exemplo `/sites/...`),
+ajuste o caminho nas configurações e use o botão de testar.
 
 **O APK não funciona para login ou envio de fotos apenas com a URL do backend antigo.**
 O novo aplicativo chama `api/health.php`, `api/login.php`,
@@ -7,7 +17,7 @@ dentro de uma instalação **separada** do conteúdo de `backend/`.
 
 ## 1. Pasta HTTPS
 
-Exemplo de estrutura se o site público for `https://exemplo.com/iplate_simples/backend`:
+Estrutura sugerida se o site público for `https://prodatastelecom.com.br/iplate_simples/backend`:
 
 ```text
 public_html/
@@ -27,15 +37,15 @@ public_html/
       schema.sql
 ```
 
-No aplicativo, em **Configurações**, informe **somente**:
+No aplicativo, em **Configurações**, deixe o valor sugerido **somente se a implantação realmente utilizar esse caminho**:
 
 ```text
-https://exemplo.com/iplate_simples/backend
+https://prodatastelecom.com.br/iplate_simples/backend
 ```
 
-**Não** informe:
-- `https://exemplo.com/iplate/backend/api/vehicle-entry-create.php`
-- `https://exemplo.com/iplate/backend/api/login.php` (ainda é o projeto antigo)
+**Não** informe endereços da API Vale Expresso ou do iPlate antigo como URL de fotos:
+- `https://prodatastelecom.com.br/iplate/backend/api/vehicle-entry-create.php`
+- `https://prodatastelecom.com.br/iplate/backend/api/login.php` (ainda é o projeto antigo)
 - `https://vale.expresso.app/api/obter_token` (autenticação Expresso feita no servidor)
 
 O app suporta colar uma URL terminada em `/api/login.php` e extrai sua raiz,
@@ -46,7 +56,7 @@ mas ainda exige o endpoint de identificação **do backend novo**.
 Abra a URL completa abaixo, substituindo o domínio e diretório instalados:
 
 ```text
-https://exemplo.com/iplate_simples/backend/api/health.php
+https://prodatastelecom.com.br/iplate_simples/backend/api/health.php
 ```
 
 O resultado esperado é exatamente um objeto JSON semelhante a:
@@ -72,11 +82,11 @@ senhas nem altera os tokens. Caso use banco novo, use o CLI
 `php backend/bin/create-user.php nome_operador "Nome completo"`.
 
 Configure `config.local.php` conforme `config.local.example.php`,
-incluindo CPF/senha da API Expresso do lado servidor (jamais dentro do APK).
+incluindo CPF/senha da API Expresso no backend da Prodatas (jamais dentro do APK).
 A autenticação Expresso usa `POST /api/obter_token`, com `cpf`
 e `password`, seguida de `POST /api/reserva` usando token e código.
 
-Para capturar e enviar as seis fotografias originais, configure
+Para capturar e enviar as seis fotografias originais e os detalhes extras **na Prodatas**, configure
 `IPLATE_SIM_UPLOAD_DIR` como **diretório existente e gravável fora do
 public_html**. Defina também `upload_max_filesize` e `post_max_size`
 compatíveis com seis fotos (por exemplo, 25M e 170M), além de limites do
