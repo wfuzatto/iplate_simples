@@ -2,6 +2,12 @@
 
 App Android para vistoria fotográfica de veículos vinculados a hóspedes, desenvolvido **separadamente** do [iPlate original](https://github.com/wfuzatto/iplate).
 
+**Destino das fotografias e vistorias:** backend próprio no servidor **Prodatas Telecom** (`prodatastelecom.com.br`).
+**Consulta de reservas:** Vale Expresso via requisição servidor-a-servidor. Fotos, placas e detalhes
+não são enviados ao Vale Expresso. O aplicativo sugere
+`https://prodatastelecom.com.br/iplate_simples/backend`, mas esse caminho
+é **previsto, não confirmado como publicado**; altere-o se o diretório real for diferente.
+
 ## Funcionalidades
 - Login de operador e configurações de URL do servidor.
 - Busca por número completo de reserva na API Expresso atualizada, **através do backend** (credenciais Expresso jamais ficam no APK).
