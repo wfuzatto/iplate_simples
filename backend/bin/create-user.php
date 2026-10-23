@@ -13,6 +13,6 @@ require dirname(__DIR__).'/db.php';
 $hash=password_hash($password,PASSWORD_DEFAULT);
 $token=bin2hex(random_bytes(32));
 $st=$pdo->prepare('INSERT INTO iplate_users (name,username,password_hash,api_token,is_active) VALUES (?,?,?,?,1)
-  ON DUPLICATE KEY UPDATE name=VALUES(name),password_hash=VALUES(password_hash),api_token=VALUES(api_token),is_active=1');
+');
 $st->execute([$name,$username,$hash,$token]);
-fwrite(STDOUT,"Usuário criado/atualizado.\n");
+fwrite(STDOUT,"Usuário criado. Se já existir, escolha outro nome para não alterar o iPlate original.\n");
