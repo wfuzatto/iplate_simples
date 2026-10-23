@@ -62,6 +62,7 @@ import kotlin.coroutines.resumeWithException
 
 private const val DEFAULT_BACKEND = ""
 private const val SETTINGS = "iplate_simples_settings"
+private const val MAX_DETAILS_PER_UPLOAD = 24
 
 private enum class PhotoType(val key: String, val caption: String) {
     PLATE("plate_photo", "Placa"),
@@ -71,6 +72,8 @@ private enum class PhotoType(val key: String, val caption: String) {
     REAR("rear_photo", "Traseira"),
     ROOF("roof_photo", "Teto")
 }
+
+private data class DetailPhoto(val id: String, val file: File, val description: String = "")
 
 private data class Guest(
     val code: String,
@@ -105,12 +108,28 @@ private fun InspectionApp() {
     val results = remember { mutableStateListOf<Guest>() }
     var plate by remember { mutableStateOf("") }
     val photos = remember { mutableStateMapOf<PhotoType, File>() }
+    val detailPhotos = remember { mutableStateListOf<DetailPhoto>() }
+    var savedEntryId by remember { mutableStateOf<Long?>(null) }
+    var savedDetailCount by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<File?>(null) }
     var pendingType by remember { mutableStateOf<PhotoType?>(null) }
     var pendingFile by remember { mutableStateOf<File?>(null) }
     val scope = rememberCoroutineScope()
+
+    val detailCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val file = pendingFile
+        pendingType = null
+        pendingFile = null
+        if (success && file != null && file.isFile && file.length() > 0L) {
+            detailPhotos.add(DetailPhoto(UUID.randomUUID().toString(), file))
+            notice = "Foto de detalhe adicionada. Você pode descrever o dano e incluir outras."
+        } else {
+            file?.delete()
+            if (!success) notice = "Foto de detalhe cancelada."
+        }
+    }
 
     val capture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val type = pendingType
@@ -157,7 +176,7 @@ private fun InspectionApp() {
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (token.isBlank()) {
+            if (token.isBlank() && !demoMode) {
                 Text("Acesso do operador", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(username, { username = it }, label = { Text("Usuário") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -170,6 +189,7 @@ private fun InspectionApp() {
                         val current = Backend.login(server, username, password)
                         token = current
                         demoMode = false
+                        savedEntryId = null
                         password = ""
                         prefs.edit().putString("username", username).apply()
                     }
@@ -190,7 +210,7 @@ private fun InspectionApp() {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (demoMode) "Prévia local da câmera" else "Operador: $username", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { token = ""; demoMode = false; selected = null; results.clear() }) { Text(if (demoMode) "Voltar" else "Sair") }
+                    TextButton(onClick = { token = ""; demoMode = false; selected = null; results.clear(); detailPhotos.clear(); savedEntryId = null; savedDetailCount = 0 }) { Text(if (demoMode) "Voltar" else "Sair") }
                 }
                 if (!demoMode && selected == null) {
                     FilledTonalButton(onClick = {
@@ -212,6 +232,7 @@ private fun InspectionApp() {
                         val found = Backend.search(server, token, term, mode)
                         results.clear(); results.addAll(found)
                         selected = null
+                        savedEntryId = null; savedDetailCount = 0
                         if (found.isEmpty()) notice = "Nenhum hóspede encontrado."
                     }
                 }, enabled = !busy && !demoMode && term.trim().length >= 3, modifier = Modifier.fillMaxWidth()) {
@@ -223,6 +244,7 @@ private fun InspectionApp() {
                     OutlinedCard(onClick = {
                         if (guest.validated) {
                             selected = guest
+                            savedEntryId = null; savedDetailCount = 0
                             results.clear()
                         } else {
                             runAction {
@@ -230,6 +252,7 @@ private fun InspectionApp() {
                                     .firstOrNull { it.code == guest.code }
                                     ?: throw IllegalStateException("Reserva não confirmada na API Expresso.")
                                 selected = verified
+                                savedEntryId = null; savedDetailCount = 0
                                 results.clear()
                             }
                         }
@@ -278,22 +301,117 @@ private fun InspectionApp() {
                             }
                         }
                     }
-                    val complete = PhotoType.entries.all { photos[it]?.length() ?: 0L > 0 }
-                    Button(onClick = {
-                        runAction {
-                            val normalized = plate.uppercase().replace(Regex("[^A-Z0-9]"), "")
-                            if (!Regex("^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$").matches(normalized))
-                                throw IllegalArgumentException("Confira a placa: use AAA1234 ou AAA1A23.")
-                            if (!guest.validated || demoMode) throw IllegalArgumentException("Primeiro localize e valide a reserva.")
-                            Backend.upload(server, token, guest.code, normalized, photos)
-                            notice = "Vistoria enviada com sucesso, com 6 fotografias originais."
+                    HorizontalDivider()
+                    Text("Fotos de detalhes", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold)
+                    Text("Registre amassados, vidro trincado, riscos ou qualquer detalhe importante. " +
+                        "As fotos são mantidas na qualidade original. Adicione quantas precisar, " +
+                        "em grupos de até $MAX_DETAILS_PER_UPLOAD por envio.",
+                        style = MaterialTheme.typography.bodySmall)
+                    if (savedDetailCount > 0) {
+                        Text("$savedDetailCount foto(s) de detalhe já armazenada(s) no veículo #${savedEntryId}.",
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                    detailPhotos.forEachIndexed { index, detail ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Detalhe ${savedDetailCount + index + 1}",
+                                        modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                    IconButton(onClick = {
+                                        detailPhotos.removeAll { it.id == detail.id }
+                                        detail.file.delete()
+                                    }, enabled = !busy) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Remover foto de detalhe")
+                                    }
+                                }
+                                val bitmap by rememberPhoto(detail.file, 800)
+                                if (bitmap != null) {
+                                    Image(bitmap!!.asImageBitmap(), contentDescription = "Ampliar detalhe",
+                                        modifier = Modifier.fillMaxWidth().height(170.dp)
+                                            .clickable { preview = detail.file },
+                                        contentScale = ContentScale.Crop)
+                                }
+                                Text("${detail.file.length() / 1024} KB • toque na imagem para ampliar",
+                                    style = MaterialTheme.typography.labelSmall)
+                                OutlinedTextField(
+                                    value = detail.description,
+                                    onValueChange = { value ->
+                                        val at = detailPhotos.indexOfFirst { it.id == detail.id }
+                                        if (at >= 0) detailPhotos[at] =
+                                            detailPhotos[at].copy(description = value.take(180))
+                                    },
+                                    label = { Text("Descrição do detalhe (opcional)") },
+                                    placeholder = { Text("Ex.: amassado na porta direita") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxLines = 2
+                                )
+                            }
                         }
-                    }, enabled = !busy && !demoMode && guest.validated && complete && plate.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()) { Text("Enviar vistoria") }
-                    if (!complete) Text("Capture todas as seis fotografias antes de enviar.",
-                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                     OutlinedButton(onClick = {
-                        selected = null; results.clear(); photos.clear(); plate = ""; term = ""; notice = ""
+                        try {
+                            val dir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+                                ?: throw IllegalStateException("Armazenamento indisponível.")
+                            dir.mkdirs()
+                            val file = File(dir, "detail_photo_${UUID.randomUUID()}.jpg")
+                            pendingType = null
+                            pendingFile = file
+                            detailCapture.launch(FileProvider.getUriForFile(
+                                context, "${context.packageName}.fileprovider", file))
+                        } catch (ex: Exception) {
+                            notice = "Não foi possível abrir a câmera: ${ex.message}"
+                        }
+                    }, enabled = !busy && detailPhotos.size < MAX_DETAILS_PER_UPLOAD,
+                        modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.AddAPhoto, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("+ Foto de detalhe (${detailPhotos.size}/$MAX_DETAILS_PER_UPLOAD)")
+                    }
+                    val complete = PhotoType.entries.all { photos[it]?.length() ?: 0L > 0 }
+                    if (savedEntryId == null) {
+                        Button(onClick = {
+                            runAction {
+                                val normalized = plate.uppercase().replace(Regex("[^A-Z0-9]"), "")
+                                if (!Regex("^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$").matches(normalized))
+                                    throw IllegalArgumentException("Confira a placa: use AAA1234 ou AAA1A23.")
+                                if (!guest.validated || demoMode) throw IllegalArgumentException(
+                                    "Primeiro localize e valide a reserva.")
+                                val submitted = detailPhotos.toList()
+                                val entryId = Backend.upload(
+                                    server, token, guest.code, normalized, photos.toMap(), submitted)
+                                savedEntryId = entryId
+                                savedDetailCount += submitted.size
+                                detailPhotos.clear()
+                                notice = "Vistoria #$entryId salva: seis fotos principais e " +
+                                    "${submitted.size} foto(s) de detalhe. " +
+                                    "Você pode acrescentar mais detalhes abaixo."
+                            }
+                        }, enabled = !busy && !demoMode && guest.validated && complete && plate.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()) { Text("Enviar vistoria e fotos de detalhes") }
+                        if (!complete) Text("Capture as seis fotografias principais antes de enviar.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Button(onClick = {
+                            runAction {
+                                val entryId = savedEntryId
+                                    ?: throw IllegalStateException("Vistoria ainda não salva.")
+                                val submitted = detailPhotos.toList()
+                                val count = Backend.appendDetails(server, token, entryId, submitted)
+                                savedDetailCount += count
+                                detailPhotos.clear()
+                                notice = "$count nova(s) foto(s) vinculada(s) à vistoria #$entryId."
+                            }
+                        }, enabled = !busy && !demoMode && detailPhotos.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text("Enviar mais detalhes para o veículo #${savedEntryId}")
+                        }
+                    }
+                    OutlinedButton(onClick = {
+                        selected = null; results.clear(); photos.clear(); detailPhotos.clear()
+                        savedEntryId = null; savedDetailCount = 0; plate = ""; term = ""; notice = ""
                     }, modifier = Modifier.fillMaxWidth()) { Text("Nova vistoria") }
                 }
             }
@@ -527,8 +645,26 @@ private object Backend {
             }
         }
 
-    suspend fun upload(base: String, token: String, reservation: String, plate: String,
-                       photos: SnapshotStateMap<PhotoType, File>) = withContext(Dispatchers.IO) {
+    private fun attachDetails(form: MultipartBody.Builder, details: List<DetailPhoto>) {
+        require(details.size <= MAX_DETAILS_PER_UPLOAD) {
+            "Máximo de $MAX_DETAILS_PER_UPLOAD fotos de detalhe por envio."
+        }
+        form.addFormDataPart("detail_count", details.size.toString())
+        details.forEachIndexed { index, detail ->
+            val file = detail.file
+            require(file.exists() && file.length() > 0L) {
+                "Fotografia de detalhe ${index + 1} não encontrada."
+            }
+            form.addFormDataPart("detail_note_$index", detail.description.trim())
+            form.addFormDataPart(
+                "detail_photo_$index", file.name, file.asRequestBody("image/jpeg".toMediaType()))
+        }
+    }
+
+    suspend fun upload(
+        base: String, token: String, reservation: String, plate: String,
+        photos: Map<PhotoType, File>, details: List<DetailPhoto>
+    ): Long = withContext(Dispatchers.IO) {
         val form = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("api_token", token)
             .addFormDataPart("reservation", reservation)
@@ -539,7 +675,26 @@ private object Backend {
                 throw IllegalArgumentException("Foto vazia: ${type.caption}")
             form.addFormDataPart(type.key, file.name, file.asRequestBody("image/jpeg".toMediaType()))
         }
+        attachDetails(form, details)
         val request = Request.Builder().url(url(base, "entry-create.php")).post(form.build()).build()
-        request(request)
+        val id = request(request).optLong("entry_id", 0L)
+        require(id > 0L) { "O servidor não retornou o identificador da vistoria." }
+        id
+    }
+
+    suspend fun appendDetails(
+        base: String, token: String, entryId: Long, details: List<DetailPhoto>
+    ): Int = withContext(Dispatchers.IO) {
+        require(details.isNotEmpty()) { "Adicione pelo menos uma foto de detalhe." }
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("api_token", token)
+            .addFormDataPart("entry_id", entryId.toString())
+        attachDetails(form, details)
+        val request = Request.Builder().url(url(base, "detail-photos-append.php"))
+            .post(form.build()).build()
+        val response = request(request)
+        val stored = response.optInt("stored_count", -1)
+        require(stored == details.size) { "Servidor retornou quantidade de fotos inesperada. Confira a vistoria." }
+        stored
     }
 }
