@@ -18,3 +18,14 @@ jobs:
         run: find backend -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Test Expresso contract without network or credentials
         run: php backend/tests/expresso-reservation-test.php
+      - name: Package backend for FTP or cPanel installation
+        run: |
+          cd backend
+          zip -q -r ../iplate-simples-backend.zip api lib bin config.php config.local.example.php db.php schema.sql DEPLOY.md .htaccess
+      - name: Publish backend distribution ZIP
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iplate-simples-backend
+          path: iplate-simples-backend.zip
+          if-no-files-found: error
